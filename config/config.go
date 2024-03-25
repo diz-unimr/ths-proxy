@@ -3,7 +3,6 @@ package config
 import (
 	"github.com/spf13/viper"
 	"log/slog"
-	"net/url"
 	"os"
 	"strings"
 )
@@ -25,16 +24,6 @@ type App struct {
 type Gics struct {
 	BaseUrl string `mapstructure:"base-url"`
 	Host    string
-}
-
-func (g *Gics) parse() *url.URL {
-	gicsUrl, _ := url.Parse(g.BaseUrl)
-	return gicsUrl
-}
-
-func (g *Gics) validate() bool {
-	_, err := url.Parse(g.BaseUrl)
-	return err == nil
 }
 
 func LoadConfig() AppConfig {
