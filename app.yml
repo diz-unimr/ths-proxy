@@ -1,0 +1,7 @@
+app:
+  name: ths-proxy
+  log-level: info
+  http:
+    port: 8080
+gics:
+  base-url:
