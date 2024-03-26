@@ -53,9 +53,17 @@ func parseConfig(path string) (config *AppConfig, err error) {
 	return config, err
 }
 
-func ConfigureLogger() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
+func ConfigureLogger(c AppConfig) {
+	lvl := new(slog.LevelVar)
+	lvl.Set(slog.LevelInfo)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: lvl,
+	}))
 	slog.SetDefault(logger)
 
+	// set configured log level
+	err := lvl.UnmarshalText([]byte(c.App.LogLevel))
+	if err != nil {
+		slog.Error("Unable to set Log level from application properties", "level", c.App.LogLevel, "error", err)
+	}
 }

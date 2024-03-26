@@ -8,7 +8,7 @@ import (
 
 func main() {
 	appConfig := config.LoadConfig()
-	config.ConfigureLogger()
+	config.ConfigureLogger(appConfig)
 
 	server := web.NewServer(appConfig)
 	slog.Error("Server failed to run", "error", server.Run())
