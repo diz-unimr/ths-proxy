@@ -68,6 +68,7 @@ func (s *Server) relay(c *gin.Context) {
 	}
 	proxy := &httputil.ReverseProxy{Director: director}
 	proxy.ServeHTTP(c.Writer, c.Request)
+	slog.Info("Request forwarded", "target", s.gicsUrl.String())
 }
 
 func (s *Server) handleSoap(c *gin.Context) {
@@ -85,16 +86,19 @@ func (s *Server) handleSoap(c *gin.Context) {
 	// POST to gICS endpoint
 	req, err := http.NewRequest("POST", target, bytes.NewBuffer([]byte(newBody)))
 	if err != nil {
-		slog.Error(err.Error(), "error", err)
+		slog.Error("Failed to build request", "error", err.Error(), "target", target)
 		c.Data(http.StatusBadRequest, "text/plain", []byte(err.Error()))
 		return
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
+		slog.Error("Failed to send request", "error", err.Error(), "target", target)
 		c.Data(http.StatusBadRequest, "text/plain", []byte(err.Error()))
+		return
 	}
 
 	gicsResp, _ := io.ReadAll(res.Body)
 	c.Data(res.StatusCode, "application/xml", gicsResp)
+	slog.Info("Request rewritten", "target", target, "status", res.Status)
 }
