@@ -99,6 +99,6 @@ func (s *Server) handleSoap(c *gin.Context) {
 	}
 
 	gicsResp, _ := io.ReadAll(res.Body)
-	c.Data(res.StatusCode, "application/xml", gicsResp)
+	c.Data(res.StatusCode, "application/soap+xml", gicsResp)
 	slog.Info("Request rewritten", "target", target, "status", res.Status)
 }
