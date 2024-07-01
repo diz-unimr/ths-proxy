@@ -14,10 +14,15 @@ import (
 	"regexp"
 )
 
+type HttpClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 type Server struct {
 	config  config.AppConfig
 	match   *regexp.Regexp
 	replace string
+	client  HttpClient
 	gicsUrl *url.URL
 }
 
@@ -31,6 +36,7 @@ func NewServer(config config.AppConfig) *Server {
 
 	return &Server{
 		config:  config,
+		client:  http.DefaultClient,
 		gicsUrl: gicsUrl,
 		match:   regexp.MustCompile(`<consent>`),
 		replace: "<notificationClientID>gICS_Soap</notificationClientID><consent>",
@@ -91,14 +97,18 @@ func (s *Server) handleSoap(c *gin.Context) {
 		return
 	}
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := s.client.Do(req)
 	if err != nil {
 		slog.Error("Failed to send request", "error", err.Error(), "target", target)
 		c.Data(http.StatusBadRequest, "text/plain", []byte(err.Error()))
 		return
 	}
 
-	gicsResp, _ := io.ReadAll(res.Body)
-	c.Data(res.StatusCode, "text/xml", gicsResp)
+	// parse content-type and return data from reader
+	ct := res.Header.Get("content-type")
+	if ct == "" {
+		ct = "text/xml"
+	}
+	c.DataFromReader(res.StatusCode, res.ContentLength, ct, res.Body, map[string]string{})
 	slog.Info("Request rewritten", "target", target, "status", res.Status)
 }

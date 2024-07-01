@@ -23,7 +23,6 @@ type App struct {
 
 type Gics struct {
 	BaseUrl string `mapstructure:"base-url"`
-	Host    string
 }
 
 func LoadConfig() AppConfig {
