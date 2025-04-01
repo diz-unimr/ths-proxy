@@ -2,7 +2,10 @@ package web
 
 import (
 	"bytes"
+	"encoding/xml"
+	"fmt"
 	"github.com/diz-unimr/ths-proxy/config"
+	"github.com/diz-unimr/ths-proxy/notification"
 	"github.com/gin-gonic/gin"
 	sloggin "github.com/samber/slog-gin"
 	"io"
@@ -24,6 +27,7 @@ type Server struct {
 	replace string
 	client  HttpClient
 	gicsUrl *url.URL
+	email   *notification.EmailClient
 }
 
 func NewServer(config config.AppConfig) *Server {
@@ -40,6 +44,7 @@ func NewServer(config config.AppConfig) *Server {
 		gicsUrl: gicsUrl,
 		match:   regexp.MustCompile(`<consent>`),
 		replace: "<notificationClientID>gICS_Soap</notificationClientID><consent>",
+		email:   notification.NewEmailClient(config.Notification.Email),
 	}
 }
 
@@ -92,15 +97,18 @@ func (s *Server) handleSoap(c *gin.Context) {
 	// POST to gICS endpoint
 	req, err := http.NewRequest("POST", target, bytes.NewBuffer([]byte(newBody)))
 	if err != nil {
-		slog.Error("Failed to build request", "error", err.Error(), "target", target)
 		c.Data(http.StatusBadRequest, "text/plain", []byte(err.Error()))
+
+		slog.Error("Failed to build request", "error", err.Error(), "target", target)
 		return
 	}
 
 	res, err := s.client.Do(req)
 	if err != nil {
-		slog.Error("Failed to send request", "error", err.Error(), "target", target)
 		c.Data(http.StatusBadRequest, "text/plain", []byte(err.Error()))
+
+		slog.Error("Failed to send request", "error", err.Error(), "target", target)
+		s.email.Send(err.Error())
 		return
 	}
 
@@ -109,6 +117,58 @@ func (s *Server) handleSoap(c *gin.Context) {
 	if ct == "" {
 		ct = "text/xml"
 	}
-	c.DataFromReader(res.StatusCode, res.ContentLength, ct, res.Body, map[string]string{})
-	slog.Info("Request rewritten", "target", target, "status", res.Status)
+	if b, err := io.ReadAll(res.Body); err == nil {
+		// return response
+		c.Data(res.StatusCode, ct, b)
+		slog.Info("Request rewritten", "target", target, "status", res.Status)
+
+		if res.StatusCode >= 400 {
+			// send notification
+			soapBody := formatResponse(b)
+			msg := fmt.Sprintf("gICS responded with error code %d:\n\n%s", res.StatusCode, soapBody)
+			s.email.Send(msg)
+		}
+	}
+}
+
+func formatResponse(b []byte) string {
+	if formatted, err := xmlIndent(b); err == nil {
+		return formatted
+	}
+	return string(b)
+}
+
+func xmlIndent(b []byte) (string, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(b))
+	decoder.Strict = false
+	buf := new(bytes.Buffer)
+	encoder := xml.NewEncoder(buf)
+	encoder.Indent("", " ")
+
+tokenize:
+	for {
+		token, err := decoder.Token()
+
+		switch {
+		case err == io.EOF:
+			err := encoder.Flush()
+			if err != nil {
+				return "", err
+			}
+
+			break tokenize
+		case err != nil:
+			slog.Debug("Failed to tokenize xml", "error", err)
+			return "", err
+		default:
+			err = encoder.EncodeToken(token)
+			if err != nil {
+				slog.Debug("Failed to encode xml", "error", err)
+				return "", err
+			}
+
+		}
+	}
+
+	return buf.String(), nil
 }

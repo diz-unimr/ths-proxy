@@ -8,8 +8,9 @@ import (
 )
 
 type AppConfig struct {
-	App  App  `mapstructure:"app"`
-	Gics Gics `mapstructure:"gics"`
+	App          App          `mapstructure:"app"`
+	Gics         Gics         `mapstructure:"gics"`
+	Notification Notification `mapstructure:"notification"`
 }
 
 type Http struct {
@@ -23,6 +24,22 @@ type App struct {
 
 type Gics struct {
 	BaseUrl string `mapstructure:"base-url"`
+}
+
+type Email struct {
+	Recipients string `mapstructure:"recipients"`
+	Sender     string `mapstructure:"sender"`
+	Smtp       Smtp   `mapstructure:"smtp"`
+}
+
+type Smtp struct {
+	Server   string `mapstructure:"server"`
+	User     string `mapstructure:"user"`
+	Password string `mapstructure:"password"`
+}
+
+type Notification struct {
+	Email Email `mapstructure:"email"`
 }
 
 func LoadConfig() AppConfig {

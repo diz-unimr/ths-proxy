@@ -5,3 +5,11 @@ app:
     port: 8080
 gics:
   base-url:
+notification:
+  email:
+    recipients:
+    sender:
+    smtp:
+      server:
+      user:
+      password:
