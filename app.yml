@@ -6,10 +6,12 @@ app:
 gics:
   base-url:
 notification:
+  match-service: addConsent
   email:
     recipients:
     sender:
     smtp:
       server:
+      port:
       user:
       password:

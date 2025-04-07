@@ -8,24 +8,36 @@ import (
 	"time"
 )
 
-type EmailClient struct {
+type EmailClient interface {
+	Send(msg string)
+}
+
+type emailClient struct {
 	Sender     string
 	Recipients []string
 	client     *mail.Client
 	throttle   <-chan time.Time
 }
 
-func NewEmailClient(config config.Email) *EmailClient {
-	client, err := mail.NewClient(config.Smtp.Server,
-		mail.WithSMTPAuth(mail.SMTPAuthLogin), mail.WithTLSPortPolicy(mail.TLSMandatory),
-		mail.WithUsername(config.Smtp.User), mail.WithPassword(config.Smtp.Password),
-	)
+func NewEmailClient(config config.Email) EmailClient {
+	var opts []mail.Option
+
+	if config.Smtp.Port != 0 {
+		opts = append(opts, mail.WithPort(config.Smtp.Port))
+	}
+	if config.Smtp.User != "" {
+		opts = append(opts, mail.WithUsername(config.Smtp.User))
+	}
+	if config.Smtp.Password != "" {
+		opts = append(opts, mail.WithPassword(config.Smtp.Password))
+	}
+	client, err := mail.NewClient(config.Smtp.Server, opts...)
 	if err != nil {
 		slog.Error("Failed to create e-mail client", "error", err)
 		return nil
 	}
 
-	return &EmailClient{
+	return &emailClient{
 		Sender:     config.Sender,
 		Recipients: strings.Split(config.Recipients, ","),
 		client:     client,
@@ -33,7 +45,7 @@ func NewEmailClient(config config.Email) *EmailClient {
 	}
 }
 
-func (c *EmailClient) Send(msg string) {
+func (c *emailClient) Send(msg string) {
 
 	// throttle messages
 	<-c.throttle
