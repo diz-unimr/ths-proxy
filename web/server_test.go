@@ -47,7 +47,6 @@ type RouteTestCase struct {
 
 type NotificationTestCase struct {
 	name         string
-	gics         *httptest.Server
 	expectNotify bool
 	mockStatus   string
 	serviceName  string
@@ -58,7 +57,7 @@ func TestHandlers(t *testing.T) {
 	gics := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Request-Path", r.URL.Path)
 		body, _ := io.ReadAll(r.Body)
-		_, _ = fmt.Fprintf(w, string(body))
+		_, _ = fmt.Fprint(w, string(body))
 	}))
 	// setup config
 	c := config.AppConfig{
