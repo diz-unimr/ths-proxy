@@ -53,9 +53,11 @@ func (c *emailClient) Send(msg string) {
 	message := mail.NewMsg()
 	if err := message.From(c.Sender); err != nil {
 		slog.Error("Failed to set FROM address.", "sender", c.Sender, "error", err)
+		return
 	}
 	if err := message.To(c.Recipients...); err != nil {
 		slog.Error("Failed to set TO address.", "recipients", c.Recipients, "error", err)
+		return
 	}
 	message.Subject("⚠️ gICS AddConsent failed")
 	message.SetBodyString(mail.TypeTextPlain, msg)
