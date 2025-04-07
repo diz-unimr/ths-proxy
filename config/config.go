@@ -34,12 +34,14 @@ type Email struct {
 
 type Smtp struct {
 	Server   string `mapstructure:"server"`
+	Port     int    `mapstructure:"port"`
 	User     string `mapstructure:"user"`
 	Password string `mapstructure:"password"`
 }
 
 type Notification struct {
-	Email Email `mapstructure:"email"`
+	Email        Email  `mapstructure:"email"`
+	MatchService string `mapstructure:"match-service"`
 }
 
 func LoadConfig() AppConfig {

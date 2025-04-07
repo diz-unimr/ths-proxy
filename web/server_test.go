@@ -1,23 +1,15 @@
 package web
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/diz-unimr/ths-proxy/config"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
+	"strconv"
+	"strings"
 	"testing"
-)
-
-var (
-	soapResponse = `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-           <soap:Body>
-             <ns2:addConsentResponse xmlns:ns2="http://cm2.ttp.ganimed.icmvc.emau.org/"/>
-           </soap:Body>
-         </soap:Envelope>`
 )
 
 type TestResponseRecorder struct {
@@ -36,76 +28,76 @@ func NewTestResponseRecorder() *TestResponseRecorder {
 	}
 }
 
-type ClientMock struct {
+type MailClientMock struct {
+	received string
 }
 
-func (c *ClientMock) Do(req *http.Request) (*http.Response, error) {
-	responseBody := io.NopCloser(bytes.NewReader([]byte(soapResponse)))
-	return &http.Response{
-		StatusCode: 200,
-		Header:     map[string][]string{"Content-Type": {"text/xml"}},
-		Body:       responseBody,
-	}, nil
+func (c *MailClientMock) Send(msg string) {
+	c.received = msg
 }
 
-type TestCase struct {
+type RouteTestCase struct {
+	name     string
+	method   string
+	endpoint string
+	body     io.Reader
+	expPath  string
+	expBody  string
+}
+
+type NotificationTestCase struct {
 	name         string
-	method       string
-	endpoint     string
-	body         io.Reader
-	expectedCode int
-	expectedBody string
+	gics         *httptest.Server
+	expectNotify bool
+	mockStatus   string
+	serviceName  string
 }
 
 func TestHandlers(t *testing.T) {
+	// dummy gics endpoint returns request body and path for verification (in header: Request-Path)
+	gics := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Request-Path", r.URL.Path)
+		body, _ := io.ReadAll(r.Body)
+		_, _ = fmt.Fprintf(w, string(body))
+	}))
 	// setup config
 	c := config.AppConfig{
 		App: config.App{},
 		Gics: config.Gics{
-			BaseUrl: "",
+			BaseUrl: gics.URL,
 		},
 	}
 
 	s := NewServer(c)
-	s.client = &ClientMock{}
-	// dummy gics server to test relay
-	gics := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = fmt.Fprintf(w, "Request relayed to unaltered")
-	}))
+	s.client = http.DefaultClient
 	defer gics.Close()
-	gicsUrl, _ := url.Parse(gics.URL)
-	s.gicsUrl = gicsUrl
 
-	body := `<consent></consent>`
-	reqBody := []byte(body)
+	origBody := `<consent></consent>`
+	modBody := `<notificationClientID>gICS_Soap</notificationClientID><consent></consent>`
 
-	cases := []TestCase{
+	cases := []RouteTestCase{
 		{
 			name: "Rewritten", method: "POST", endpoint: "/gics/gicsService",
-			body: bytes.NewBuffer(reqBody), expectedCode: 200, expectedBody: soapResponse,
+			body: strings.NewReader(origBody), expPath: "/gics/gicsServiceWithNotification", expBody: modBody,
 		},
 		{
 			name: "NoRoute_Method", method: "GET", endpoint: "/gics/gicsService",
-			body: bytes.NewBuffer(reqBody), expectedCode: 200, expectedBody: "Request relayed to unaltered",
+			body: strings.NewReader(origBody), expPath: "/gics/gicsService", expBody: origBody,
 		},
 		{
 			name: "NoRoute_Endpoint", method: "POST", endpoint: "/gics/gicsServiceWithNotification",
-			body: bytes.NewBuffer(reqBody), expectedCode: 200, expectedBody: "Request relayed to unaltered",
+			body: strings.NewReader(origBody), expPath: "/gics/gicsServiceWithNotification", expBody: origBody,
 		},
 	}
 
-	testRoute(t, s, "POST", "/gics/gicsService", bytes.NewBuffer(reqBody), http.StatusOK, soapResponse)
-	testRoute(t, s, "GET", "/gics/gicsService", bytes.NewBuffer(reqBody), http.StatusOK, "Request relayed to unaltered")
-	testRoute(t, s, "POST", "/gics/gicsServiceWithNotification", bytes.NewBuffer(reqBody), http.StatusOK, "Request relayed to unaltered")
-
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			testRoute(t, s, c.method, c.endpoint, bytes.NewBuffer(reqBody), c.expectedCode, c.expectedBody)
+			testRoute(t, s, c.method, c.endpoint, c.body, c.expPath, c.expBody)
 		})
 	}
 }
 
-func testRoute(t *testing.T, s *Server, method, endpoint string, body io.Reader, expectedCode int, expectedBody string) {
+func testRoute(t *testing.T, s *Server, method, endpoint string, body io.Reader, expectedPath, expectedBody string) {
 	// setup routes
 	r := s.setupRouter()
 
@@ -114,7 +106,83 @@ func testRoute(t *testing.T, s *Server, method, endpoint string, body io.Reader,
 
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, expectedCode, w.Code)
-	rBody, _ := io.ReadAll(w.Body)
-	assert.Equal(t, expectedBody, string(rBody))
+	assert.Equal(t, expectedPath, w.Header().Get("Request-Path"))
+	assert.Equal(t, expectedBody, w.Body.String())
+}
+
+func TestNotification(t *testing.T) {
+
+	// dummy gics endpoint
+	gics := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mockResult, _ := strconv.Atoi(r.Header.Get("Mock-Status"))
+		w.WriteHeader(mockResult)
+		//_, _ = fmt.Fprintf(w, soapErrResponse)
+	}))
+	defer gics.Close()
+
+	// setup config
+	c := config.AppConfig{
+		App: config.App{},
+		Gics: config.Gics{
+			BaseUrl: gics.URL,
+		},
+	}
+
+	s := NewServer(c)
+
+	cases := []NotificationTestCase{
+		{
+			name:         "SuccessResponse",
+			mockStatus:   "200",
+			expectNotify: false,
+			serviceName:  "addConsent",
+		},
+		{
+			name:         "Error_Response",
+			mockStatus:   "400",
+			expectNotify: true,
+			serviceName:  "addConsent",
+		},
+		{
+			name:         "Error_Response_No_Match",
+			mockStatus:   "200",
+			expectNotify: false,
+			serviceName:  "invalid",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			testNotification(t, s, c.expectNotify, c.serviceName, c.mockStatus)
+		})
+	}
+}
+
+func testNotification(t *testing.T, s *Server, expectNotify bool, serviceName, mockStatus string) {
+
+	// setup test notification client
+	mailMock := &MailClientMock{}
+	s.proxy.Transport = &NotifyTransport{
+		notifier: mailMock,
+		match:    serviceName,
+	}
+	// setup routes
+	r := s.setupRouter()
+
+	reqBody := `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cm2="http://cm2.ttp.ganimed.icmvc.emau.org/">
+				  <soapenv:Header/>
+				  <soapenv:Body>
+				    <cm2:addConsent>
+                      <consent></consent>
+					</cm2:addConsent>
+				</soapenv:Body>
+			</soapenv:Envelope>`
+
+	req, _ := http.NewRequest(http.MethodPost, "/gics/gicsService", strings.NewReader(reqBody))
+	req.Header.Set("Mock-Status", mockStatus)
+	w := NewTestResponseRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, expectNotify, mailMock.received != "")
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/diz-unimr/ths-proxy/config"
 	"github.com/diz-unimr/ths-proxy/notification"
 	"github.com/gin-gonic/gin"
+	"github.com/go-xmlfmt/xmlfmt"
 	sloggin "github.com/samber/slog-gin"
 	"io"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 )
 
 type HttpClient interface {
@@ -27,7 +29,7 @@ type Server struct {
 	replace string
 	client  HttpClient
 	gicsUrl *url.URL
-	email   *notification.EmailClient
+	proxy   *httputil.ReverseProxy
 }
 
 func NewServer(config config.AppConfig) *Server {
@@ -38,13 +40,19 @@ func NewServer(config config.AppConfig) *Server {
 		os.Exit(1)
 	}
 
+	proxy := httputil.NewSingleHostReverseProxy(gicsUrl)
+	proxy.Transport = &NotifyTransport{
+		notifier: notification.NewEmailClient(config.Notification.Email),
+		match:    config.Notification.MatchService,
+	}
+
 	return &Server{
 		config:  config,
 		client:  http.DefaultClient,
 		gicsUrl: gicsUrl,
+		proxy:   proxy,
 		match:   regexp.MustCompile(`<consent>`),
 		replace: "<notificationClientID>gICS_Soap</notificationClientID><consent>",
-		email:   notification.NewEmailClient(config.Notification.Email),
 	}
 }
 
@@ -65,20 +73,13 @@ func (s *Server) setupRouter() *gin.Engine {
 	r.Use(sloggin.New(slog.Default()), gin.Recovery())
 
 	r.POST("/gics/gicsService", s.handleSoap)
-	r.NoRoute(func(c *gin.Context) {
-		s.relay(c)
-	})
-
+	r.NoRoute(s.relay)
 	return r
 }
 
 func (s *Server) relay(c *gin.Context) {
-	director := func(req *http.Request) {
-		req.URL.Scheme = s.gicsUrl.Scheme
-		req.URL.Host = s.gicsUrl.Host
-	}
-	proxy := &httputil.ReverseProxy{Director: director}
-	proxy.ServeHTTP(c.Writer, c.Request)
+
+	s.proxy.ServeHTTP(c.Writer, c.Request)
 	slog.Info("Request forwarded", "target", s.gicsUrl.String())
 }
 
@@ -87,88 +88,78 @@ func (s *Server) handleSoap(c *gin.Context) {
 	body, _ := io.ReadAll(c.Request.Body)
 	strBody := string(body)
 	newBody := s.match.ReplaceAllString(strBody, s.replace)
+	if strBody == newBody {
+		s.relay(c)
+	}
 
 	target := s.gicsUrl.String() + "/gics/gicsServiceWithNotification"
-	if strBody == newBody {
+	targetUrl, err := url.Parse(target)
+	if err != nil {
 		s.relay(c)
 		return
 	}
+	c.Request.URL = targetUrl
 
-	// POST to gICS endpoint
-	req, err := http.NewRequest("POST", target, bytes.NewBuffer([]byte(newBody)))
+	// rewrite body
+	c.Request.Body = io.NopCloser(strings.NewReader(newBody))
+	c.Request.ContentLength = int64(len(newBody))
+
+	s.relay(c)
+}
+
+type NotifyTransport struct {
+	notifier notification.EmailClient
+	match    string
+}
+
+func (t *NotifyTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+
+	reqBody, _ := io.ReadAll(request.Body)
+	request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+	req := &SoapEnvelope{}
+	_ = xml.Unmarshal(reqBody, req)
+
+	soapServiceName := req.Body.Service.XMLName.Local
+	response, err := http.DefaultTransport.RoundTrip(request)
 	if err != nil {
-		c.Data(http.StatusBadRequest, "text/plain", []byte(err.Error()))
+		return response, err
+	}
 
-		slog.Error("Failed to build request", "error", err.Error(), "target", target)
+	if response.StatusCode >= 400 {
+		t.notify(response, soapServiceName)
+	}
+
+	return response, err
+}
+
+func (t *NotifyTransport) notify(response *http.Response, soapService string) {
+
+	if t.match != soapService {
 		return
 	}
 
-	res, err := s.client.Do(req)
-	if err != nil {
-		c.Data(http.StatusBadRequest, "text/plain", []byte(err.Error()))
+	respBody, _ := io.ReadAll(response.Body)
+	response.Body = io.NopCloser(bytes.NewBuffer(respBody))
 
-		slog.Error("Failed to send request", "error", err.Error(), "target", target)
-		s.email.Send(err.Error())
-		return
-	}
+	// format soap response
+	soapBody := xmlfmt.FormatXML(string(respBody), "", "  ")
+	// send notification
+	msg := fmt.Sprintf("gICS responded with error code %d:\n\n%s", response.StatusCode, soapBody)
 
-	// parse content-type and return data from reader
-	ct := res.Header.Get("content-type")
-	if ct == "" {
-		ct = "text/xml"
-	}
-	if b, err := io.ReadAll(res.Body); err == nil {
-		// return response
-		c.Data(res.StatusCode, ct, b)
-		slog.Info("Request rewritten", "target", target, "status", res.Status)
+	t.notifier.Send(msg)
 
-		if res.StatusCode >= 400 {
-			// send notification
-			soapBody := formatResponse(b)
-			msg := fmt.Sprintf("gICS responded with error code %d:\n\n%s", res.StatusCode, soapBody)
-			s.email.Send(msg)
-		}
-	}
 }
 
-func formatResponse(b []byte) string {
-	if formatted, err := xmlIndent(b); err == nil {
-		return formatted
-	}
-	return string(b)
+type SoapEnvelope struct {
+	XMLName xml.Name
+	Body    Body
 }
 
-func xmlIndent(b []byte) (string, error) {
-	decoder := xml.NewDecoder(bytes.NewReader(b))
-	decoder.Strict = false
-	buf := new(bytes.Buffer)
-	encoder := xml.NewEncoder(buf)
-	encoder.Indent("", " ")
+type Service struct {
+	XMLName xml.Name
+}
 
-tokenize:
-	for {
-		token, err := decoder.Token()
-
-		switch {
-		case err == io.EOF:
-			err := encoder.Flush()
-			if err != nil {
-				return "", err
-			}
-
-			break tokenize
-		case err != nil:
-			slog.Debug("Failed to tokenize xml", "error", err)
-			return "", err
-		default:
-			err = encoder.EncodeToken(token)
-			if err != nil {
-				slog.Debug("Failed to encode xml", "error", err)
-				return "", err
-			}
-
-		}
-	}
-
-	return buf.String(), nil
+type Body struct {
+	XMLName xml.Name
+	Service Service `xml:",any"`
 }
