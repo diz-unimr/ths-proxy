@@ -12,14 +12,13 @@ func TestSend(t *testing.T) {
 	server := smtpmock.New(smtpmock.ConfigurationAttr{
 		LogToStdout:       true,
 		LogServerActivity: true,
-		HostAddress:       "hex.localhost",
 	})
 
 	if err := server.Start(); err != nil {
 		fmt.Println(err)
 	}
 
-	hostAddress, portNumber := "hex.localhost", server.PortNumber()
+	hostAddress, portNumber := "127.0.0.1", server.PortNumber()
 
 	c := config.Email{
 		Sender:     "test@localhost",
@@ -27,18 +26,15 @@ func TestSend(t *testing.T) {
 		Smtp: config.Smtp{
 			Server: hostAddress,
 			Port:   portNumber,
+			Helo:   "localhost",
 		},
 	}
 	client := NewEmailClient(c)
 
-	msg := "TEST"
-	client.Send(msg)
+	client.Send("TEST")
 
-	assert.NotEmpty(t, server.Messages())
-	for _, m := range server.Messages() {
-		fmt.Println(m)
-		assert.Equal(t, msg, m.DataResponse())
-	}
+	messages := server.MessagesAndPurge()
+	assert.Len(t, messages, 1)
 
 	if err := server.Stop(); err != nil {
 		fmt.Println(err)

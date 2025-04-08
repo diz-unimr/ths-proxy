@@ -37,6 +37,7 @@ type Smtp struct {
 	Port     int    `mapstructure:"port"`
 	User     string `mapstructure:"user"`
 	Password string `mapstructure:"password"`
+	Helo     string `mapstructure:"helo"`
 }
 
 type Notification struct {

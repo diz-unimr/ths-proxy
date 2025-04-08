@@ -20,7 +20,7 @@ type emailClient struct {
 }
 
 func NewEmailClient(config config.Email) EmailClient {
-	var opts []mail.Option
+	opts := []mail.Option{mail.WithTLSPortPolicy(mail.TLSOpportunistic)}
 
 	if config.Smtp.Port != 0 {
 		opts = append(opts, mail.WithPort(config.Smtp.Port))
@@ -31,6 +31,10 @@ func NewEmailClient(config config.Email) EmailClient {
 	if config.Smtp.Password != "" {
 		opts = append(opts, mail.WithPassword(config.Smtp.Password))
 	}
+	if config.Smtp.Helo != "" {
+		opts = append(opts, mail.WithHELO(config.Smtp.Helo))
+	}
+
 	client, err := mail.NewClient(config.Smtp.Server, opts...)
 	if err != nil {
 		slog.Error("Failed to create e-mail client", "error", err)
@@ -59,7 +63,7 @@ func (c *emailClient) Send(msg string) {
 		slog.Error("Failed to set TO address.", "recipients", c.Recipients, "error", err)
 		return
 	}
-	message.Subject("⚠️ gICS AddConsent failed")
+	message.Subject("⚠️ gICS addConsent failed")
 	message.SetBodyString(mail.TypeTextPlain, msg)
 
 	if err := c.client.DialAndSend(message); err != nil {
