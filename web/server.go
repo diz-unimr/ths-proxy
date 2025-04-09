@@ -138,16 +138,25 @@ func (t *NotifyTransport) notify(response *http.Response, soapService string) {
 		return
 	}
 
-	respBody, _ := io.ReadAll(response.Body)
-	response.Body = io.NopCloser(bytes.NewBuffer(respBody))
+	req, _ := httputil.DumpRequest(response.Request, false)
 
-	// format soap response
-	soapBody := xmlfmt.FormatXML(string(respBody), "", "  ")
-	// send notification
-	msg := fmt.Sprintf("gICS responded with error code %d:\n\n%s", response.StatusCode, soapBody)
+	msg := fmt.Sprintf("Request: %s\nResponse: %d", req, response.StatusCode)
 
-	t.notifier.Send(msg)
+	t.notifier.Send(
+		fmt.Sprintf("⚠️ gICS SOAP request '%s' failed", soapService),
+		msg,
+		bodyParser(response),
+	)
+}
 
+func bodyParser(response *http.Response) func() string {
+	return func() string {
+		respBody, _ := io.ReadAll(response.Body)
+		response.Body = io.NopCloser(bytes.NewBuffer(respBody))
+
+		// format soap response
+		return xmlfmt.FormatXML(string(respBody), "", "  ")
+	}
 }
 
 type SoapEnvelope struct {

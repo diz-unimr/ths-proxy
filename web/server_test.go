@@ -32,7 +32,7 @@ type MailClientMock struct {
 	received string
 }
 
-func (c *MailClientMock) Send(msg string) {
+func (c *MailClientMock) Send(_, msg string, _ func() string) {
 	c.received = msg
 }
 

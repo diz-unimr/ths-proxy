@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"fmt"
 	"github.com/diz-unimr/ths-proxy/config"
 	"github.com/wneessen/go-mail"
 	"log/slog"
@@ -8,13 +9,31 @@ import (
 	"time"
 )
 
+type Details func() string
+
 type EmailClient interface {
-	Send(msg string)
+	Send(subject, msg string, details func() string)
+}
+
+type DetailLevel int
+
+const (
+	LevelInfo DetailLevel = iota
+	LevelDebug
+)
+
+var detailLevels = map[DetailLevel]string{
+	LevelInfo:  "info",
+	LevelDebug: "debug",
+}
+
+func (dl DetailLevel) String() string {
+	return detailLevels[dl]
 }
 
 type emailClient struct {
 	Sender     string
-	Recipients []string
+	Recipients map[DetailLevel][]string
 	client     *mail.Client
 	throttle   <-chan time.Time
 }
@@ -41,16 +60,31 @@ func NewEmailClient(config config.Email) EmailClient {
 		return nil
 	}
 
+	recp := map[DetailLevel][]string{
+		LevelInfo:  strings.Split(config.Recipients.Info, ","),
+		LevelDebug: strings.Split(config.Recipients.Debug, ","),
+	}
+
 	return &emailClient{
 		Sender:     config.Sender,
-		Recipients: strings.Split(config.Recipients, ","),
+		Recipients: recp,
 		client:     client,
 		throttle:   time.Tick(1 * time.Second),
 	}
 }
 
-func (c *emailClient) Send(msg string) {
+func (c *emailClient) Send(subject, msg string, details func() string) {
 
+	for level, recp := range c.Recipients {
+		if level == LevelDebug {
+			c.sendTo(recp, subject, msg)
+		} else {
+			c.sendTo(recp, subject, fmt.Sprintf("%s\nBody:\n%s", msg, details()))
+		}
+	}
+}
+
+func (c *emailClient) sendTo(recp []string, subject string, body string) {
 	// throttle messages
 	<-c.throttle
 
@@ -59,12 +93,12 @@ func (c *emailClient) Send(msg string) {
 		slog.Error("Failed to set FROM address.", "sender", c.Sender, "error", err)
 		return
 	}
-	if err := message.To(c.Recipients...); err != nil {
+	if err := message.To(recp...); err != nil {
 		slog.Error("Failed to set TO address.", "recipients", c.Recipients, "error", err)
 		return
 	}
-	message.Subject("⚠️ gICS addConsent failed")
-	message.SetBodyString(mail.TypeTextPlain, msg)
+	message.Subject(subject)
+	message.SetBodyString(mail.TypeTextPlain, body)
 
 	if err := c.client.DialAndSend(message); err != nil {
 		slog.Error("Failed to deliver E-Mail", "error", err)

@@ -9,6 +9,8 @@ notification:
   match-service: addConsent
   email:
     recipients:
+      info:
+      debug:
     sender:
     smtp:
       server:

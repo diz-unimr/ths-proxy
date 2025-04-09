@@ -21,8 +21,11 @@ func TestSend(t *testing.T) {
 	hostAddress, portNumber := "127.0.0.1", server.PortNumber()
 
 	c := config.Email{
-		Sender:     "test@localhost",
-		Recipients: "test@localhost",
+		Sender: "test@localhost",
+		Recipients: config.Recipients{
+			Info:  "test@localhost",
+			Debug: "test@localhost",
+		},
 		Smtp: config.Smtp{
 			Server: hostAddress,
 			Port:   portNumber,
@@ -31,10 +34,12 @@ func TestSend(t *testing.T) {
 	}
 	client := NewEmailClient(c)
 
-	client.Send("TEST")
+	client.Send("Oops, something went wrong", "TEST", func() string {
+		return "Body"
+	})
 
 	messages := server.MessagesAndPurge()
-	assert.Len(t, messages, 1)
+	assert.Len(t, messages, 2)
 
 	if err := server.Stop(); err != nil {
 		fmt.Println(err)

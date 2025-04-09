@@ -26,10 +26,15 @@ type Gics struct {
 	BaseUrl string `mapstructure:"base-url"`
 }
 
+type Recipients struct {
+	Info  string `mapstructure:"info"`
+	Debug string `mapstructure:"debug"`
+}
+
 type Email struct {
-	Recipients string `mapstructure:"recipients"`
-	Sender     string `mapstructure:"sender"`
-	Smtp       Smtp   `mapstructure:"smtp"`
+	Recipients Recipients `mapstructure:"recipients"`
+	Sender     string     `mapstructure:"sender"`
+	Smtp       Smtp       `mapstructure:"smtp"`
 }
 
 type Smtp struct {
