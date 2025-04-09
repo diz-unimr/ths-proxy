@@ -20,7 +20,7 @@ type emailClient struct {
 }
 
 func NewEmailClient(config config.Email) EmailClient {
-	opts := []mail.Option{mail.WithTLSPortPolicy(mail.TLSOpportunistic)}
+	opts := []mail.Option{mail.WithTLSPolicy(mail.TLSOpportunistic)}
 
 	if config.Smtp.Port != 0 {
 		opts = append(opts, mail.WithPort(config.Smtp.Port))
