@@ -2,13 +2,13 @@ module github.com/diz-unimr/ths-proxy
 
 go 1.23.0
 
-toolchain go1.24.1
+toolchain go1.24.3
 
 require (
-	github.com/gin-gonic/gin v1.10.0
+	github.com/gin-gonic/gin v1.10.1
 	github.com/go-xmlfmt/xmlfmt v1.1.3
 	github.com/mocktools/go-smtp-mock/v2 v2.4.0
-	github.com/samber/slog-gin v1.15.0
+	github.com/samber/slog-gin v1.15.1
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
 	github.com/wneessen/go-mail v0.6.2
