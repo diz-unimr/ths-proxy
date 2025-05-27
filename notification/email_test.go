@@ -34,9 +34,7 @@ func TestSend(t *testing.T) {
 	}
 	client := NewEmailClient(c)
 
-	client.Send("Oops, something went wrong", "TEST", func() string {
-		return "Body"
-	})
+	client.Send("Oops, something went wrong", "TEST", "Body")
 
 	messages := server.MessagesAndPurge()
 	assert.Len(t, messages, 2)

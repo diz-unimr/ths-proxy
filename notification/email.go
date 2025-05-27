@@ -12,7 +12,7 @@ import (
 type Details func() string
 
 type EmailClient interface {
-	Send(subject, msg string, details func() string)
+	Send(subject, msg string, details string)
 }
 
 type DetailLevel int
@@ -73,15 +73,17 @@ func NewEmailClient(config config.Email) EmailClient {
 	}
 }
 
-func (c *emailClient) Send(subject, msg string, details func() string) {
+func (c *emailClient) Send(subject, msg string, details string) {
 
 	for level, recp := range c.Recipients {
 		if level == LevelDebug {
-			c.sendTo(recp, subject, msg)
+			c.sendTo(recp, subject, fmt.Sprintf("%s\n\nDetails:\n%s", msg, details))
+
 		} else {
-			c.sendTo(recp, subject, fmt.Sprintf("%s\nBody:\n%s", msg, details()))
+			c.sendTo(recp, subject, msg)
 		}
 	}
+	slog.Debug("Notification sent", "type", "email")
 }
 
 func (c *emailClient) sendTo(recp []string, subject string, body string) {
