@@ -7,7 +7,6 @@ import (
 	"github.com/diz-unimr/ths-proxy/config"
 	"github.com/diz-unimr/ths-proxy/notification"
 	"github.com/gin-gonic/gin"
-	"github.com/go-xmlfmt/xmlfmt"
 	sloggin "github.com/samber/slog-gin"
 	"io"
 	"log/slog"
@@ -138,25 +137,24 @@ func (t *NotifyTransport) notify(response *http.Response, soapService string) {
 		return
 	}
 
+	// redact Authorization header value
+	response.Request.Header.Set("Authorization", "[REDACTED]")
 	req, _ := httputil.DumpRequest(response.Request, false)
 
-	msg := fmt.Sprintf("Request: %s\nResponse: %d", req, response.StatusCode)
+	msg := fmt.Sprintf("Request:\n%s\nResponse: %d", req, response.StatusCode)
 
-	t.notifier.Send(
-		fmt.Sprintf("⚠️ gICS SOAP request '%s' failed", soapService),
-		msg,
-		bodyParser(response),
+	go t.notifier.Send(
+		fmt.Sprintf("❗ gICS SOAP request '%s' failed", soapService),
+		msg, dumpBody(response),
 	)
 }
 
-func bodyParser(response *http.Response) func() string {
-	return func() string {
-		respBody, _ := io.ReadAll(response.Body)
-		response.Body = io.NopCloser(bytes.NewBuffer(respBody))
-
-		// format soap response
-		return xmlfmt.FormatXML(string(respBody), "", "  ")
+func dumpBody(response *http.Response) string {
+	resp, err := httputil.DumpResponse(response, true)
+	if err != nil {
+		return ""
 	}
+	return string(resp)
 }
 
 type SoapEnvelope struct {
