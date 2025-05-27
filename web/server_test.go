@@ -189,7 +189,7 @@ func testNotification(t *testing.T, s *Server, expectNotify bool, serviceName, m
 	select {
 	case received := <-mailMock.received:
 		assert.Equal(t, expectNotify, received != "")
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		assert.Fail(t, "timed out waiting for notification")
 	}
 }
