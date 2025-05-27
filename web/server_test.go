@@ -162,7 +162,7 @@ func testNotification(t *testing.T, s *Server, expectNotify bool, serviceName, m
 
 	// setup test notification client
 	mailMock := &MailClientMock{
-		received: make(chan string, 1),
+		received: make(chan string),
 	}
 	s.proxy.Transport = &NotifyTransport{
 		notifier: mailMock,
@@ -186,10 +186,11 @@ func testNotification(t *testing.T, s *Server, expectNotify bool, serviceName, m
 
 	r.ServeHTTP(w, req)
 
+	var received string
 	select {
-	case received := <-mailMock.received:
-		assert.Equal(t, expectNotify, received != "")
-	case <-time.After(5 * time.Second):
-		assert.Fail(t, "timed out waiting for notification")
+	case received = <-mailMock.received:
+	case <-time.After(1 * time.Second):
 	}
+
+	assert.Equal(t, expectNotify, received != "")
 }
