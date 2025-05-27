@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 type TestResponseRecorder struct {
@@ -29,11 +30,11 @@ func NewTestResponseRecorder() *TestResponseRecorder {
 }
 
 type MailClientMock struct {
-	received string
+	received chan string
 }
 
 func (c *MailClientMock) Send(_, msg string, _ string) {
-	c.received = msg
+	c.received <- msg
 }
 
 type RouteTestCase struct {
@@ -160,7 +161,9 @@ func TestNotification(t *testing.T) {
 func testNotification(t *testing.T, s *Server, expectNotify bool, serviceName, mockStatus string) {
 
 	// setup test notification client
-	mailMock := &MailClientMock{}
+	mailMock := &MailClientMock{
+		received: make(chan string, 1),
+	}
 	s.proxy.Transport = &NotifyTransport{
 		notifier: mailMock,
 		match:    serviceName,
@@ -183,5 +186,10 @@ func testNotification(t *testing.T, s *Server, expectNotify bool, serviceName, m
 
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, expectNotify, mailMock.received != "")
+	select {
+	case received := <-mailMock.received:
+		assert.Equal(t, expectNotify, received != "")
+	case <-time.After(1 * time.Second):
+		assert.Fail(t, "timed out waiting for notification")
+	}
 }
