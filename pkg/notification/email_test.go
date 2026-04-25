@@ -2,10 +2,11 @@ package notification
 
 import (
 	"fmt"
-	"github.com/diz-unimr/ths-proxy/config"
+	"testing"
+
+	"github.com/diz-unimr/ths-proxy/pkg/config"
 	smtpmock "github.com/mocktools/go-smtp-mock/v2"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestSend(t *testing.T) {
@@ -34,7 +35,7 @@ func TestSend(t *testing.T) {
 	}
 	client := NewEmailClient(c)
 
-	client.Send("Oops, something went wrong", "TEST", "Body")
+	client.Send("Oops, something went wrong", "TEST", "Body", nil)
 
 	messages := server.MessagesAndPurge()
 	assert.Len(t, messages, 2)

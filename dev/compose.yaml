@@ -1,0 +1,17 @@
+services:
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: top-secret
+    volumes:
+      - ./init:/docker-entrypoint-initdb.d
+  gics:
+    image: mosaicgreifswald/gics:2025.1.2
+    ports:
+      - "8081:8080"
+    depends_on:
+      - mysql
+    environment:
+      WF_ADMIN_PASS: top-secret
+      WF_HEALTHCHECK_URLS: http://localhost:8080

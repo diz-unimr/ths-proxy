@@ -2,13 +2,14 @@ package config
 
 import (
 	"context"
-	"github.com/spf13/viper"
-	"github.com/stretchr/testify/assert"
 	"log/slog"
 	"os"
 	"path"
 	"runtime"
 	"testing"
+
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConfigureLoggerSetsLogLevel(t *testing.T) {

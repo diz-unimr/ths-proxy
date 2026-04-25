@@ -4,10 +4,6 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
-	"github.com/diz-unimr/ths-proxy/config"
-	"github.com/diz-unimr/ths-proxy/notification"
-	"github.com/gin-gonic/gin"
-	sloggin "github.com/samber/slog-gin"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,6 +12,12 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/diz-unimr/ths-proxy/pkg/config"
+	"github.com/diz-unimr/ths-proxy/pkg/consent"
+	"github.com/diz-unimr/ths-proxy/pkg/notification"
+	"github.com/gin-gonic/gin"
+	sloggin "github.com/samber/slog-gin"
 )
 
 type HttpClient interface {
@@ -115,7 +117,7 @@ func (t *NotifyTransport) RoundTrip(request *http.Request) (*http.Response, erro
 
 	reqBody, _ := io.ReadAll(request.Body)
 	request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
-	req := &SoapEnvelope{}
+	req := &consent.SoapEnvelope{}
 	_ = xml.Unmarshal(reqBody, req)
 
 	soapServiceName := req.Body.Service.XMLName.Local
@@ -125,13 +127,13 @@ func (t *NotifyTransport) RoundTrip(request *http.Request) (*http.Response, erro
 	}
 
 	if response.StatusCode >= 400 {
-		t.notify(response, soapServiceName)
+		t.notify(response, soapServiceName, &req.Body.Service.Scan)
 	}
 
 	return response, err
 }
 
-func (t *NotifyTransport) notify(response *http.Response, soapService string) {
+func (t *NotifyTransport) notify(response *http.Response, soapService string, document *consent.Document) {
 
 	if t.match != soapService {
 		return
@@ -145,7 +147,7 @@ func (t *NotifyTransport) notify(response *http.Response, soapService string) {
 
 	go t.notifier.Send(
 		fmt.Sprintf("❗ gICS SOAP request '%s' failed", soapService),
-		msg, dumpBody(response),
+		msg, dumpBody(response), document,
 	)
 }
 
@@ -155,18 +157,4 @@ func dumpBody(response *http.Response) string {
 		return ""
 	}
 	return string(resp)
-}
-
-type SoapEnvelope struct {
-	XMLName xml.Name
-	Body    Body
-}
-
-type Service struct {
-	XMLName xml.Name
-}
-
-type Body struct {
-	XMLName xml.Name
-	Service Service `xml:",any"`
 }
