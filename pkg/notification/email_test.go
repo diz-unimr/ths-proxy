@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	"github.com/diz-unimr/ths-proxy/pkg/config"
+	"github.com/diz-unimr/ths-proxy/pkg/consent"
 	smtpmock "github.com/mocktools/go-smtp-mock/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/wneessen/go-mail"
 )
 
 func TestSend(t *testing.T) {
@@ -43,4 +45,18 @@ func TestSend(t *testing.T) {
 	if err := server.Stop(); err != nil {
 		fmt.Println(err)
 	}
+}
+
+func TestAddAttachment(t *testing.T) {
+	doc := consent.Document{
+		Name: "test",
+		Type: "application/pdf",
+		Data: new("JVBERi0xLjIgCjkgMCBvYmoKPDwKPj4Kc3RyZWFtCkJULyA5IFRmKFRlc3QpJyBFVAplbmRzdHJlYW0KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCA1IDAgUgovQ29udGVudHMgOSAwIFIKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL0tpZHMgWzQgMCBSIF0KL0NvdW50IDEKL1R5cGUgL1BhZ2VzCi9NZWRpYUJveCBbIDAgMCA5OSA5IF0KPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1BhZ2VzIDUgMCBSCi9UeXBlIC9DYXRhbG9nCj4+CmVuZG9iagp0cmFpbGVyCjw8Ci9Sb290IDMgMCBSCj4+CiUlRU9G"),
+	}
+
+	msg := mail.NewMsg()
+
+	addAttachment(msg, new(doc))
+
+	assert.Equal(t, msg.GetAttachments()[0].ContentType.String(), "application/pdf")
 }

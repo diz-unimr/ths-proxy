@@ -122,7 +122,7 @@ func addAttachment(message *mail.Msg, doc *consent.Document) {
 		slog.Error("Failed to decode base64 consent document to attach", "error", err)
 		return
 	}
-	if err := message.AttachReader(doc.Name, bytes.NewReader(data)); err != nil {
+	if err := message.AttachReader(doc.Name, bytes.NewReader(data), mail.WithFileContentType(mail.ContentType(doc.Type))); err != nil {
 		slog.Error("Failed to decode attachment data", "error", err)
 		// continue without attachment
 		return
