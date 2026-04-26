@@ -2,13 +2,14 @@ package config
 
 import (
 	"context"
-	"github.com/spf13/viper"
-	"github.com/stretchr/testify/assert"
 	"log/slog"
 	"os"
 	"path"
 	"runtime"
 	"testing"
+
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConfigureLoggerSetsLogLevel(t *testing.T) {
@@ -16,7 +17,7 @@ func TestConfigureLoggerSetsLogLevel(t *testing.T) {
 
 	expected := "debug"
 
-	ConfigureLogger(AppConfig{App: App{LogLevel: expected}})
+	ConfigureLogger(&AppConfig{App: App{LogLevel: expected}})
 
 	assert.True(t, slog.Default().Enabled(context.Background(), slog.LevelDebug))
 }
@@ -27,7 +28,7 @@ func TestParseConfigWithEnv(t *testing.T) {
 	expected := "test"
 	t.Setenv("GICS_BASE_URL", expected)
 
-	config := LoadConfig()
+	config := LoadConfig(".")
 
 	assert.Equal(t, expected, config.Gics.BaseUrl)
 }
@@ -43,7 +44,7 @@ func TestParseConfigFileNotFound(t *testing.T) {
 
 func setProjectDir() {
 	_, filename, _, _ := runtime.Caller(0)
-	dir := path.Join(path.Dir(filename), "..")
+	dir := path.Join(path.Dir(filename), "../..")
 	_ = os.Chdir(dir)
 
 	viper.Reset()

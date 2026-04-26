@@ -2,8 +2,6 @@ package web
 
 import (
 	"fmt"
-	"github.com/diz-unimr/ths-proxy/config"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +9,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/diz-unimr/ths-proxy/pkg/config"
+	"github.com/diz-unimr/ths-proxy/pkg/consent"
+	"github.com/stretchr/testify/assert"
 )
 
 type TestResponseRecorder struct {
@@ -33,7 +35,7 @@ type MailClientMock struct {
 	received chan string
 }
 
-func (c *MailClientMock) Send(_, msg string, _ string) {
+func (c *MailClientMock) Send(_, msg string, _ string, _ *consent.Document) {
 	c.received <- msg
 }
 
@@ -171,7 +173,7 @@ func testNotification(t *testing.T, s *Server, expectNotify bool, serviceName, m
 	// setup routes
 	r := s.setupRouter()
 
-	reqBody := `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cm2="http://cm2.ttp.ganimed.icmvc.emau.org/">
+	reqBody := `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/consent/envelope/" xmlns:cm2="http://cm2.ttp.ganimed.icmvc.emau.org/">
 				  <soapenv:Header/>
 				  <soapenv:Body>
 				    <cm2:addConsent>

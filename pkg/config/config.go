@@ -1,10 +1,11 @@
 package config
 
 import (
-	"github.com/spf13/viper"
 	"log/slog"
 	"os"
 	"strings"
+
+	"github.com/spf13/viper"
 )
 
 type AppConfig struct {
@@ -50,14 +51,14 @@ type Notification struct {
 	MatchService string `mapstructure:"match-service"`
 }
 
-func LoadConfig() AppConfig {
-	c, err := parseConfig(".")
+func LoadConfig(path string) *AppConfig {
+	c, err := parseConfig(path)
 	if err != nil {
 		slog.Error("Unable to load config file", "error", err)
 		os.Exit(1)
 	}
 
-	return *c
+	return c
 }
 
 func parseConfig(path string) (config *AppConfig, err error) {
@@ -77,7 +78,7 @@ func parseConfig(path string) (config *AppConfig, err error) {
 	return config, err
 }
 
-func ConfigureLogger(c AppConfig) {
+func ConfigureLogger(c *AppConfig) {
 	lvl := new(slog.LevelVar)
 	lvl.Set(slog.LevelInfo)
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
