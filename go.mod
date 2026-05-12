@@ -2,15 +2,15 @@ module github.com/diz-unimr/ths-proxy
 
 go 1.26.0
 
-toolchain go1.26.2
+toolchain go1.26.3
 
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/mocktools/go-smtp-mock/v2 v2.5.4
-	github.com/samber/slog-gin v1.21.0
+	github.com/samber/slog-gin v1.21.1
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	github.com/wneessen/go-mail v0.7.2
+	github.com/wneessen/go-mail v0.7.3
 )
 
 require (
@@ -55,7 +55,7 @@ require (
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
